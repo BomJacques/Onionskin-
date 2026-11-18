@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141611">
+<title>Frame Echo · Onion-skin camera</title>
+<style>
+  :root{color-scheme:dark;--bg:#141611;--panel:#1c1f18;--field:#262a20;--line:#363c2e;--text:#f3f4ec;--muted:#adbaa0;--accent:#d8fa89;--dark:#242f0c;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,sans-serif}
+  button,select,input{font:inherit;color:inherit}
+  button,select,.download{background:var(--field);border:1px solid var(--line);border-radius:9px;padding:9px 12px;min-height:41px;cursor:pointer}
+  button:hover:not(:disabled),.download:hover{border-color:var(--muted)}
+  button:disabled{opacity:.45;cursor:default}
+  button[aria-pressed=true]{background:#343e25;border-color:#91ad62;color:var(--accent)}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  input[type=range]{accent-color:var(--accent);width:100%;cursor:pointer}
+  header{border-bottom:1px solid var(--line)}
+  .wrap{max-width:1320px;margin:auto;padding-inline:clamp(14px,4vw,54px)}
+  .header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:17px}
+  h1,h2,p{margin:0}
+  h1{font-size:25px;letter-spacing:-.045em;line-height:1}
+  h2{font-size:15px;font-weight:650}
+  .brand{display:flex;align-items:center;gap:12px}
+  .mark{width:26px;height:22px;position:relative;margin-right:3px}
+  .mark::before,.mark::after{content:"";position:absolute;width:17px;height:17px;border-radius:5px;border:2px solid var(--accent)}
+  .mark::before{top:0;left:0;opacity:.55}.mark::after{bottom:0;right:0}
+  .muted{color:var(--muted);font-size:13px}
+  .workspace{display:grid;grid-template-columns:minmax(0,1fr) 306px;align-items:start;gap:18px;padding-block:22px 32px}
+  .workspace>section{min-width:0}
+  .stage{background:#0d100c;border:1px solid var(--line);border-radius:15px;position:relative;overflow:hidden;isolation:isolate;height:clamp(270px,56vh,640px)}
+  .stage video,.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .ghost{pointer-events:none}
+  .difference{mix-blend-mode:difference}
+  .stage-top{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;pointer-events:none}
+  .chip{font:11px/1.3 var(--mono);padding:6px 8px;background:#141811e8;border:1px solid #535e45;border-radius:6px;color:#e1ecd7}
+  .idle{position:absolute;inset:0;display:grid;align-content:center;justify-items:center;gap:12px;padding:18px;text-align:center}
+  .idle strong{font-size:19px;letter-spacing:-.025em}
+  .idle p{max-width:33ch}
+  .reticle{width:70px;height:52px;margin-bottom:8px;background:
+   linear-gradient(var(--accent),var(--accent)) 0 0/14px 1px,linear-gradient(var(--accent),var(--accent)) 0 0/1px 14px,
+   linear-gradient(var(--accent),var(--accent)) 100% 0/14px 1px,linear-gradient(var(--accent),var(--accent)) 100% 0/1px 14px,
+   linear-gradient(var(--accent),var(--accent)) 0 100%/14px 1px,linear-gradient(var(--accent),var(--accent)) 0 100%/1px 14px,
+   linear-gradient(var(--accent),var(--accent)) 100% 100%/14px 1px,linear-gradient(var(--accent),var(--accent)) 100% 100%/1px 14px;
+   background-repeat:no-repeat;opacity:.6}
+  .grid{position:absolute;display:grid;grid-template:repeat(3,1fr)/repeat(3,1fr);pointer-events:none}
+  .grid i{border-right:1px solid #fff6;border-bottom:1px solid #fff6}
+  .grid i:nth-child(3n){border-right:0}.grid i:nth-child(n+7){border-bottom:0}
+  .countdown{position:absolute;inset:0;display:grid;place-items:center;font:700 80px var(--mono);text-shadow:0 2px 20px #000;pointer-events:none}
+  .stage.flash{animation:flash .25s ease-out}
+  @keyframes flash{0%{filter:brightness(1.6)}100%{filter:none}}
+  @media(prefers-reduced-motion:reduce){.stage.flash{animation:none}}
+  .camera-bar{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;padding:11px 0 6px}
+  .primary{background:var(--accent);color:var(--dark);font-weight:700;border-color:transparent}
+  .camera-bar .primary{min-width:130px}
+  .message{min-height:2.1em;padding-block:3px 6px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:14px}
+  aside{display:grid;gap:12px}
+  .card h2{margin-bottom:12px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .card .row+.row,.card .row+label,.card label+.row{margin-top:10px}
+  .card label{display:block}
+  .card select{min-height:37px;padding:5px 8px}
+  .seg{display:flex;gap:5px}
+  .seg button{padding-inline:8px;flex:1}
+  .slider{margin-top:9px}
+  .slider .row{font-size:13px}
+  output,.numbers{font:12px var(--mono);color:var(--muted)}
+  .export-btn{width:100%;margin-top:10px}
+  .stage-match{position:absolute;left:12px;bottom:12px;color:var(--accent)}
+  .camera-tools{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+  @media(max-width:480px){.camera-bar{flex-direction:column}.camera-tools button{min-height:38px}}
+  #match{width:100%;height:8px;accent-color:var(--accent);display:block;margin:8px 0}
+  .film{border-top:1px solid var(--line);padding-top:12px}
+  .film .row{justify-content:space-between}
+  .film-actions{display:flex;gap:5px;flex-wrap:wrap}
+  .strip{display:flex;gap:8px;overflow:auto;padding:6px 2px 8px;min-height:80px;align-items:center}
+  .thumb{width:80px;height:60px;flex:none;padding:0;position:relative;overflow:hidden;color:#fff}
+  .thumb img{width:100%;height:100%;object-fit:cover}
+  .thumb span{position:absolute;bottom:4px;left:5px;background:#141611e8;border-radius:4px;padding:2px 5px;font:10px var(--mono)}
+  .thumb[aria-pressed=true]{outline:1px solid var(--accent);outline-offset:1px}
+  .footnote{margin-top:8px}
+  .download{display:inline-flex;align-items:center;text-decoration:none;color:var(--accent);margin-top:8px}
+  @media(max-width:760px){.workspace{grid-template-columns:1fr;gap:10px;padding-block:12px 28px}.stage{height:clamp(250px,46svh,520px)}aside{grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr))}.header{padding-block:13px}.camera-bar button{padding-inline:9px}.camera-bar .primary{min-width:86px}}
+  @media(max-width:380px){.camera-bar{gap:5px}.camera-bar button{font-size:13px}}
+</style>
+</head>
+<body>
+<header><div class="wrap header">
+  <div class="brand"><span class="mark" aria-hidden="true"></span><h1>Frame Echo</h1></div>
+  <span class="muted">Onion-skin camera</span>
+</div></header>
+<main class="wrap workspace">
+  <section aria-label="Camera and frames">
+    <div class="stage" id="stage">
+      <video id="live" autoplay muted playsinline hidden aria-label="Live camera"></video>
+      <img id="ghost" class="ghost" alt="" hidden>
+      <img id="review" alt="Frame preview" hidden>
+      <div id="grid" class="grid" aria-hidden="true" hidden><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="idle" id="idle">
+        <span class="reticle" aria-hidden="true"></span>
+        <strong>Line up your next shot</strong>
+        <p class="muted">Start the camera, then take or import a photo to use as your reference.</p>
+        <button class="primary" id="start">Start camera</button>
+      </div>
+      <div class="stage-top"><span class="chip" id="stageMode" hidden></span><span class="chip" id="resolution" hidden></span></div>
+      <span class="chip stage-match" id="stageMatch" hidden></span>
+      <div class="countdown" id="countdown" aria-hidden="true" hidden></div>
+    </div>
+    <div class="camera-bar">
+      <div class="camera-tools">
+        <button class="primary" id="shutter" disabled title="Spacebar">Take photo</button>
+        <button id="auto" aria-pressed="false" disabled>Arm auto</button>
+      </div>
+      <div class="camera-tools">
+        <button id="flip" disabled>Switch camera</button>
+        <button id="native" title="Open your device’s camera for an original still">Device camera</button>
+        <button id="import">Import</button>
+      </div>
+      <input type="file" id="file" accept="image/*" multiple hidden>
+      <input type="file" id="nativeFile" accept="image/*" capture="environment" hidden>
+    </div>
+    <p class="message muted" id="message" role="status"></p>
+    <section class="film" aria-labelledby="filmTitle">
+      <div class="row"><h2 id="filmTitle">Frames <span class="numbers" id="frameCount">0</span></h2><div class="film-actions">
+        <button id="play" disabled>Play</button>
+        <button id="savePhoto" disabled>Save photo</button>
+        <button id="remove" disabled>Remove</button>
+      </div></div>
+      <div class="strip" id="strip"><span class="muted">Your photos appear here.</span></div>
+      <p class="muted" id="frameInfo"></p>
+    </section>
+  </section>
+  <aside aria-label="Capture and export settings">
+    <section class="card"><h2>Onion skin</h2>
+      <div class="seg" id="modes" aria-label="Overlay mode" role="group">
+        <button data-mode="blend" aria-pressed="true">Blend</button>
+        <button data-mode="difference" aria-pressed="false">Difference</button>
+        <button data-mode="off" aria-pressed="false">Off</button>
+      </div>
+      <label class="slider" for="opacity"><span class="row"><span>Opacity</span><output id="opacityValue">45%</output></span><input id="opacity" type="range" min="0" max="100" value="45"></label>
+      <div class="row"><label for="reference">Reference</label><select id="reference"><option value="latest">Latest frame</option><option value="first">First frame</option><option value="selected" disabled>Selected frame</option></select></div>
+      <div class="row"><button id="gridToggle" aria-pressed="false">Grid</button><label for="timer">Timer <select id="timer"><option value="0">Off</option><option value="3">3 s</option><option value="10">10 s</option></select></label></div>
+    </section>
+    <section class="card"><h2>Auto shutter</h2>
+      <label class="slider" for="threshold"><span class="row"><span>Match threshold</span><output id="thresholdValue">90%</output></span><input id="threshold" type="range" min="65" max="99" value="90"></label>
+      <progress id="match" max="100" value="0" aria-label="Alignment match"></progress>
+      <p id="matchLabel" class="muted">Start the camera and add a reference.</p>
+
+    </section>
+    <section class="card"><h2>Video export</h2>
+      <div class="row"><label for="fps">Speed</label><select id="fps"><option value="1">1 frame/s</option><option value="3">3 frames/s</option><option value="6" selected>6 frames/s</option><option value="12">12 frames/s</option><option value="24">24 frames/s</option></select></div>
+      <div class="row"><label for="quality">Resolution</label><select id="quality"><option value="1280">Up to 1280 px</option><option value="1920" selected>Up to 1920 px</option><option value="3840">Up to 3840 px</option></select></div>
+      <div class="row"><label for="format">Format</label><select id="format"></select></div>
+      <button class="primary export-btn" id="export" disabled>Make video</button>
+      <a class="download" id="download" hidden>Download video</a>
+      <p class="footnote muted" id="exportStatus" role="status">Add photos to export a video.</p>
+    </section>
+  </aside>
+</main>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const live = $('live'), ghost = $('ghost'), review = $('review');
+const state = {
+  frames: [], selected: null, stream: null, facing: 'environment', mode: 'blend', grid: false,
+  db: null, busy: false, ready: false, auto: false, stableSince: null, play: null, timer: null,
+  stopExport: null, exportUrl: null, sampleRef: null
+};
+const status = message => { $('message').textContent = message; };
+const cameraReady = () => state.stream?.getVideoTracks()[0]?.readyState === 'live' && !live.paused && live.videoWidth > 0 && live.readyState >= 2;
+const selectedFrame = () => state.frames.find(frame => frame.id === state.selected);
+const reference = () => {
+  if ($('reference').value === 'first') return state.frames[0];
+  if ($('reference').value === 'selected') return selectedFrame();
+  return state.frames.at(-1);
+};
+const pixelLabel = (width, height) => width + ' × ' + height;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+function openStore() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('frame-echo', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('frames', { keyPath: 'id', autoIncrement: true });
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function transact(mode, action) {
+  return new Promise((resolve, reject) => {
+    const tx = state.db.transaction('frames', mode);
+    const request = action(tx.objectStore('frames'));
+    tx.oncomplete = () => resolve(request.result);
+    tx.onabort = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function readImage(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('This browser could not open that photo.'));
+    image.src = url;
+  });
+}
+
+function makeFrame(record) {
+  return { ...record, url: URL.createObjectURL(record.blob) };
+}
+
+async function storePhoto(blob, method, name) {
+  const url = URL.createObjectURL(blob);
+  try {
+    const image = await readImage(url);
+    const record = { blob, width: image.naturalWidth, height: image.naturalHeight, method, name };
+    let temporary = !state.db;
+    let id;
+    if (state.db) {
+      try { id = await transact('readwrite', store => store.add(record)); }
+      catch { temporary = true; }
+    }
+    const frame = { ...record, id: id ?? 'temp-' + Math.random(), url, temporary };
+    state.frames.push(frame);
+    state.selected = frame.id;
+    return frame;
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
+function saveFile(url, name) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function redrawStrip() {
+  const strip = $('strip');
+  strip.replaceChildren();
+  if (!state.frames.length) {
+    const empty = document.createElement('span');
+    empty.className = 'muted';
+    empty.textContent = 'Your photos appear here.';
+    strip.append(empty);
+  }
+  for (const [index, frame] of state.frames.entries()) {
+    const button = document.createElement('button');
+    const img = new Image(), number = document.createElement('span');
+    img.src = frame.url;
+    img.alt = '';
+    img.loading = 'lazy';
+    number.textContent = String(index + 1).padStart(2, '0');
+    button.className = 'thumb';
+    button.setAttribute('aria-label', 'Select frame ' + (index + 1));
+    button.setAttribute('aria-pressed', String(state.selected === frame.id));
+    button.append(img, number);
+    button.addEventListener('click', () => {
+      if (state.busy || state.stopExport) return;
+      state.selected = frame.id;
+      const wasArmed = state.auto;
+      disarm();
+      if (wasArmed) status('Frame changed. Arm the auto shutter again when ready.');
+      updateView();
+      refreshControls();
+      strip.querySelectorAll('.thumb').forEach((element, i) => {
+        element.setAttribute('aria-pressed', String(i === index));
+      });
+    });
+    strip.append(button);
+  }
+}
+
+function layoutGrid() {
+  const grid = $('grid');
+  if (grid.hidden) return;
+  const stage = $('stage');
+  const scale = Math.min(stage.clientWidth / live.videoWidth, stage.clientHeight / live.videoHeight);
+  const width = live.videoWidth * scale, height = live.videoHeight * scale;
+  Object.assign(grid.style, {
+    left: (stage.clientWidth - width) / 2 + 'px', top: (stage.clientHeight - height) / 2 + 'px',
+    width: width + 'px', height: height + 'px'
+  });
+}
+
+function updateView() {
+  const camera = cameraReady(), referenceFrame = reference(), chosen = selectedFrame();
+  const viewing = state.play?.frame || (!camera && chosen);
+  live.hidden = !camera || !!viewing;
+  review.hidden = !viewing;
+  if (viewing && review.src !== viewing.url) review.src = viewing.url;
+  if (!viewing) review.removeAttribute('src');
+  ghost.hidden = !camera || !referenceFrame || !!viewing || state.mode === 'off';
+  if (referenceFrame && ghost.src !== referenceFrame.url) ghost.src = referenceFrame.url;
+  if (!referenceFrame) ghost.removeAttribute('src');
+  ghost.style.opacity = Number($('opacity').value) / 100;
+  ghost.classList.toggle('difference', state.mode === 'difference');
+  $('idle').hidden = camera || !!state.play;
+  $('idle').style.background = viewing && !state.play ? '#0d100cb8' : '';
+  $('idle').querySelector('strong').textContent = viewing ? 'Start camera to align the next shot' : 'Line up your next shot';
+  $('idle').querySelector('p').hidden = !!viewing;
+  $('stageMode').hidden = !(camera || state.play);
+  const refIndex = state.frames.indexOf(referenceFrame) + 1;
+  $('stageMode').textContent = state.play ? 'PLAYBACK' : refIndex ? 'LIVE · REF ' + refIndex : 'LIVE';
+  $('resolution').hidden = !camera && !viewing;
+  $('resolution').textContent = viewing ? pixelLabel(viewing.width, viewing.height) : pixelLabel(live.videoWidth, live.videoHeight) + ' preview';
+  $('grid').hidden = !state.grid || !camera || !!viewing;
+  layoutGrid();
+}
+
+function refreshControls() {
+  const camera = cameraReady(), frame = selectedFrame(), ref = reference(), exporting = !!state.stopExport;
+  const locked = state.busy || exporting || !state.ready;
+  $('start').disabled = locked;
+  $('flip').disabled = !camera || locked || !!state.timer;
+  $('shutter').disabled = !camera || locked;
+  $('native').disabled = $('import').disabled = locked || !!state.timer;
+  $('shutter').textContent = state.timer ? 'Cancel timer' : 'Take photo';
+  $('play').disabled = !state.frames.length || locked;
+  $('play').textContent = state.play ? 'Stop' : 'Play';
+  $('savePhoto').disabled = !frame || locked;
+  $('remove').disabled = !frame || locked;
+  $('reference').options[2].disabled = !frame;
+  $('reference').disabled = locked;
+  $('auto').disabled = !camera || !ref || locked || !!state.timer || !!state.play;
+  $('auto').textContent = state.auto ? 'Disarm auto' : 'Arm auto';
+  $('stageMatch').hidden = !state.auto;
+  $('auto').setAttribute('aria-pressed', String(state.auto));
+  $('frameCount').textContent = state.frames.length;
+  $('frameInfo').textContent = frame
+    ? 'Frame ' + (state.frames.indexOf(frame) + 1) + ' · ' + pixelLabel(frame.width, frame.height) + ' · ' + frame.method + (frame.temporary ? ' · temporary' : '')
+    : '';
+  $('export').disabled = exporting ? false : !state.frames.length || locked || !$('format').value;
+  for (const id of ['fps', 'quality', 'format']) $(id).disabled = exporting;
+  $('export').textContent = exporting ? 'Cancel export' : 'Make video';
+  if (options.size && !exporting && !state.exportUrl) {
+    const info = $('exportStatus');
+    if (!state.frames.length) info.textContent = 'Add photos to export a video.';
+    else if (info.textContent === 'Add photos to export a video.') info.textContent = 'Choose a speed and resolution.';
+  }
+}
+
+function refreshFrames(scroll = false) {
+  redrawStrip();
+  updateView();
+  refreshControls();
+  if (scroll) $('strip').scrollLeft = $('strip').scrollWidth;
+}
+
+function stopCamera() {
+  state.stream?.getTracks().forEach(track => track.stop());
+  state.stream = null;
+  live.srcObject = null;
+}
+
+async function startCamera() {
+  if (state.busy || state.stopExport) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    status('Live camera access needs HTTPS or localhost. You can still import photos.');
+    return;
+  }
+  stopPlayback();
+  disarm();
+  state.busy = true;
+  refreshControls();
+  stopCamera();
+  try {
+    const constraints = { facingMode: { ideal: state.facing }, width: { ideal: 4096 }, height: { ideal: 3072 } };
+    if (navigator.mediaDevices.getSupportedConstraints().resizeMode) constraints.resizeMode = { ideal: 'none' };
+    state.stream = await navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
+    const track = state.stream.getVideoTracks()[0];
+    live.srcObject = state.stream;
+    await live.play();
+    state.facing = track.getSettings().facingMode || state.facing;
+    $('nativeFile').setAttribute('capture', state.facing);
+    track.addEventListener('ended', () => {
+      if (state.stream?.getVideoTracks()[0] !== track) return;
+      stopCamera();
+      disarm();
+      cancelTimer();
+      updateView();
+      refreshControls();
+      status('Camera disconnected. Start it again to continue.');
+    });
+    status('Camera ready.');
+  } catch (error) {
+    stopCamera();
+    status(error.name === 'NotAllowedError' ? 'Camera access was blocked. Check browser permissions or import a photo.' : 'Could not start the camera. ' + error.message);
+  } finally {
+    state.busy = false;
+    updateView();
+    refreshControls();
+  }
+}
+
+async function cameraPhoto() {
+  const track = state.stream.getVideoTracks()[0];
+  if (typeof ImageCapture === 'function') {
+    try {
+      const camera = new ImageCapture(track);
+      const caps = await camera.getPhotoCapabilities?.().catch(() => null);
+      const size = {};
+      if (caps?.imageWidth?.max) size.imageWidth = caps.imageWidth.max;
+      if (caps?.imageHeight?.max) size.imageHeight = caps.imageHeight.max;
+      const blob = await camera.takePhoto(size).catch(() => camera.takePhoto());
+      if (blob?.size) return storePhoto(blob, 'Camera still', 'photo.jpg');
+    } catch { /* Fall back to the full live frame. */ }
+  }
+  if (!cameraReady()) throw new Error('Camera preview is unavailable.');
+  const canvas = document.createElement('canvas');
+  canvas.width = live.videoWidth;
+  canvas.height = live.videoHeight;
+  canvas.getContext('2d').drawImage(live, 0, 0);
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.98));
+  if (!blob) throw new Error('The camera frame could not be saved.');
+  return storePhoto(blob, 'Live camera', 'photo.jpg');
+}
+
+async function takePhoto(automatic = false) {
+  if (!cameraReady() || state.busy || state.stopExport) return;
+  disarm();
+  stopPlayback();
+  state.busy = true;
+  refreshControls();
+  try {
+    const frame = await cameraPhoto();
+    $('stage').classList.remove('flash');
+    void $('stage').offsetWidth;
+    $('stage').classList.add('flash');
+    status((automatic ? 'Auto shutter captured ' : 'Captured ') + pixelLabel(frame.width, frame.height) + (frame.temporary ? ' · save a copy before closing.' : '.'));
+  } catch (error) {
+    status(error.message);
+  } finally {
+    state.busy = false;
+    refreshFrames(true);
+  }
+}
+
+function cancelTimer() {
+  if (state.timer) clearInterval(state.timer);
+  state.timer = null;
+  $('countdown').hidden = true;
+  refreshControls();
+}
+
+function shutter() {
+  if (state.timer) {
+    cancelTimer();
+    status('Timer cancelled.');
+    return;
+  }
+  if (!cameraReady() || state.busy || state.stopExport) return;
+  const seconds = Number($('timer').value);
+  if (!seconds) return takePhoto();
+  disarm();
+  stopPlayback();
+  const end = performance.now() + seconds * 1000;
+  const tick = () => {
+    const remaining = Math.ceil((end - performance.now()) / 1000);
+    $('countdown').textContent = remaining;
+    if (remaining > 0) return;
+    cancelTimer();
+    takePhoto();
+  };
+  $('countdown').hidden = false;
+  state.timer = setInterval(tick, 70);
+  tick();
+  refreshControls();
+}
+
+async function importPhotos(input, native = false) {
+  const files = Array.from(input.files);
+  input.value = '';
+  if (!files.length || state.busy || state.stopExport) return;
+  disarm();
+  stopPlayback();
+  state.busy = true;
+  refreshControls();
+  const added = [];
+  for (const file of files) {
+    try { added.push(await storePhoto(file, native ? 'Device original' : 'Imported', file.name)); }
+    catch { /* Continue importing other photos. */ }
+  }
+  state.busy = false;
+  const rejected = files.length - added.length;
+  const latest = added.at(-1);
+  status((latest ? 'Added ' + added.length + (added.length === 1 ? ' photo' : ' photos') + ' · ' + pixelLabel(latest.width, latest.height) + ' last.' : '') +
+    (rejected ? ' Could not open ' + rejected + (rejected === 1 ? ' image.' : ' images.') : '') +
+    (added.some(frame => frame.temporary) ? ' Save a copy before closing.' : ''));
+  refreshFrames(true);
+}
+
+async function removePhoto() {
+  const frame = selectedFrame();
+  if (!frame || !confirm('Remove this photo from the sequence?')) return;
+  disarm();
+  cancelTimer();
+  stopPlayback();
+  state.busy = true;
+  refreshControls();
+  try {
+    if (!frame.temporary) await transact('readwrite', store => store.delete(frame.id));
+    state.frames = state.frames.filter(item => item !== frame);
+    state.selected = state.frames.at(-1)?.id ?? null;
+    if (!state.selected) $('reference').value = 'latest';
+    URL.revokeObjectURL(frame.url);
+    status('Photo removed.');
+  } catch {
+    status('Could not remove the saved photo.');
+  } finally {
+    state.busy = false;
+    refreshFrames();
+  }
+}
+
+function stopPlayback() {
+  if (!state.play) return;
+  clearInterval(state.play.interval);
+  state.play = null;
+  updateView();
+  refreshControls();
+}
+
+function togglePlayback() {
+  if (state.play) return stopPlayback();
+  if (!state.frames.length || state.busy || state.stopExport) return;
+  disarm();
+  cancelTimer();
+  let index = 0;
+  const advance = () => {
+    state.play.frame = state.frames[index];
+    index = (index + 1) % state.frames.length;
+    updateView();
+  };
+  state.play = { interval: setInterval(advance, 1000 / Number($('fps').value)), frame: null };
+  advance();
+  refreshControls();
+}
+
+// Match the shared centre crop, then compare luminance and edges separately.
+const sampleSize = 72;
+const sampleCanvas = Object.assign(document.createElement('canvas'), { width: sampleSize, height: sampleSize });
+const sampler = sampleCanvas.getContext('2d', { willReadFrequently: true });
+
+function signature(image, width, height, aspect) {
+  const cropWidth = Math.min(width, height * aspect), cropHeight = Math.min(height, width / aspect);
+  sampler.fillStyle = '#000';
+  sampler.fillRect(0, 0, sampleSize, sampleSize);
+  sampler.drawImage(image, (width - cropWidth) / 2, (height - cropHeight) / 2,
+    cropWidth, cropHeight, 0, 0, sampleSize, sampleSize);
+  const pixels = sampler.getImageData(0, 0, sampleSize, sampleSize).data;
+  const light = new Float32Array(sampleSize * sampleSize), edges = [];
+  for (let i = 0; i < light.length; i++) {
+    light[i] = (pixels[i * 4] * .2126 + pixels[i * 4 + 1] * .7152 + pixels[i * 4 + 2] * .0722);
+  }
+  for (let y = 2; y < sampleSize - 2; y += 2) {
+    for (let x = 2; x < sampleSize - 2; x += 2) {
+      const i = y * sampleSize + x;
+      edges.push(light[i + 2] - light[i - 2], light[i + 2 * sampleSize] - light[i - 2 * sampleSize]);
+    }
+  }
+  return { light, edges };
+}
+
+function correlation(first, second, minDeviation) {
+  const n = first.length;
+  let sumA = 0, sumB = 0, aa = 0, bb = 0, ab = 0;
+  for (let i = 0; i < n; i++) {
+    const a = first[i], b = second[i];
+    sumA += a;
+    sumB += b;
+    aa += a * a;
+    bb += b * b;
+    ab += a * b;
+  }
+  const varA = aa - sumA * sumA / n, varB = bb - sumB * sumB / n;
+  if (Math.min(varA, varB) < n * minDeviation ** 2) return null;
+  return Math.min(1, Math.max(0, (ab - sumA * sumB / n) / Math.sqrt(varA * varB)));
+}
+
+function disarm() {
+  state.auto = false;
+  state.stableSince = null;
+}
+
+async function compare() {
+  if (!cameraReady() || state.busy || state.play || state.stopExport || document.hidden) {
+    state.stableSince = null;
+    $('match').value = 0;
+    $('matchLabel').textContent = 'Start the camera and add a reference.';
+    return;
+  }
+  const ref = reference();
+  if (!ref) {
+    $('match').value = 0;
+    $('matchLabel').textContent = 'Take or import a reference photo.';
+    return;
+  }
+  const aspect = live.videoWidth / live.videoHeight >= 1
+    ? Math.min(ref.width / ref.height, live.videoWidth / live.videoHeight)
+    : Math.max(ref.width / ref.height, live.videoWidth / live.videoHeight);
+  if (state.sampleRef?.id !== ref.id || state.sampleRef.aspect !== aspect) {
+    state.stableSince = null;
+    const image = await readImage(ref.url);
+    state.sampleRef = { id: ref.id, aspect, data: signature(image, ref.width, ref.height, aspect) };
+  }
+  if (!cameraReady() || ref !== reference() || state.busy || state.stopExport || state.play || document.hidden) return;
+  const source = state.sampleRef.data;
+  const current = signature(live, live.videoWidth, live.videoHeight, aspect);
+  const light = correlation(source.light, current.light, 8);
+  const edge = correlation(source.edges, current.edges, 5);
+  if (light === null || edge === null) {
+    state.stableSince = null;
+    $('match').value = 0;
+    $('matchLabel').textContent = 'Aim at a scene with clearer edges and detail.';
+    $('stageMatch').textContent = 'AUTO · NEEDS DETAIL';
+    return;
+  }
+  const score = Math.round(100 * (.4 * light + .6 * edge));
+  $('match').value = score;
+  const passes = score >= Number($('threshold').value);
+  const now = performance.now();
+  if (state.auto && passes) state.stableSince ??= now;
+  else state.stableSince = null;
+  $('matchLabel').textContent = score + '% match' + (state.stableSince !== null ? ' · hold steady' : state.auto ? ' · armed' : '');
+  $('stageMatch').textContent = 'AUTO · ' + score + '% MATCH' + (state.stableSince !== null ? ' · HOLD' : '');
+  if (state.stableSince !== null && now - state.stableSince >= 750) void takePhoto(true);
+}
+
+function fitPhoto(context, image, width, height) {
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const w = image.naturalWidth * scale, h = image.naturalHeight * scale;
+  context.fillStyle = '#000';
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, (width - w) / 2, (height - h) / 2, w, h);
+}
+
+const formats = [
+  { label: 'MP4', extension: 'mp4', types: ['video/mp4;codecs=avc1.420034', 'video/mp4;codecs=avc1', 'video/mp4'] },
+  { label: 'WebM', extension: 'webm', types: ['video/webm;codecs=vp8', 'video/webm;codecs=vp9', 'video/webm'] }
+];
+const options = new Map();
+if (window.MediaRecorder?.isTypeSupported && HTMLCanvasElement.prototype.captureStream) {
+  for (const format of formats) {
+    const supported = format.types.filter(type => MediaRecorder.isTypeSupported(type));
+    if (!supported.length) continue;
+    options.set(format.extension, supported);
+    $('format').add(new Option(format.label, format.extension));
+  }
+}
+if (!options.size) {
+  $('format').add(new Option('Unavailable', ''));
+  $('exportStatus').textContent = 'This browser does not support recording a canvas.';
+}
+
+async function makeVideo() {
+  if (state.stopExport) {
+    state.stopExport();
+    return;
+  }
+  if (!state.frames.length || state.busy || !options.size) return;
+  disarm();
+  cancelTimer();
+  stopPlayback();
+  const frames = state.frames.slice();
+  const fps = Number($('fps').value), max = Number($('quality').value), extension = $('format').value;
+  const info = $('exportStatus');
+  const abort = new AbortController(), signal = abort.signal;
+  state.stopExport = () => abort.abort();
+  if (state.exportUrl) URL.revokeObjectURL(state.exportUrl);
+  state.exportUrl = null;
+  $('download').hidden = true;
+  refreshControls();
+  let stream, recorder, stopRecording;
+  const stopIfHidden = () => { if (document.hidden) abort.abort(); };
+  document.addEventListener('visibilitychange', stopIfHidden);
+  try {
+    const canvas = document.createElement('canvas');
+    const first = frames[0], scale = Math.min(1, max / Math.max(first.width, first.height));
+    canvas.width = Math.max(2, Math.round(first.width * scale / 2) * 2);
+    canvas.height = Math.max(2, Math.round(first.height * scale / 2) * 2);
+    const context = canvas.getContext('2d', { alpha: false });
+    let image = await readImage(first.url);
+    signal.throwIfAborted();
+    fitPhoto(context, image, canvas.width, canvas.height);
+    stream = canvas.captureStream(Math.max(30, fps));
+    for (const mimeType of options.get(extension)) {
+      try {
+        const candidate = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: max >= 3840 ? 24000000 : 10000000 });
+        candidate.start();
+        recorder = candidate;
+        break;
+      } catch { /* Some devices reject a codec they advertise. */ }
+    }
+    if (!recorder) throw new Error('Try a lower video resolution or another format.');
+    const chunks = [];
+    const complete = new Promise(resolve => {
+      recorder.addEventListener('dataavailable', event => { if (event.data.size) chunks.push(event.data); });
+      recorder.addEventListener('stop', () => resolve(null), { once: true });
+      recorder.addEventListener('error', event => {
+        resolve(event.error || new Error('Video encoding failed.'));
+        abort.abort();
+      }, { once: true });
+    });
+    stopRecording = () => { if (recorder.state !== 'inactive') recorder.stop(); };
+    signal.addEventListener('abort', stopRecording, { once: true });
+
+    for (let i = 0; i < frames.length; i++) {
+      signal.throwIfAborted();
+      fitPhoto(context, image, canvas.width, canvas.height);
+      const deadline = performance.now() + 1000 / fps;
+      info.textContent = 'Recording frame ' + (i + 1) + ' of ' + frames.length + ' · keep this tab open.';
+      // Decode the next photo while its predecessor is on screen. Draw periodically
+      // so captureStream emits frames even when a photo is held for a full second.
+      const next = frames[i + 1] && readImage(frames[i + 1].url).catch(error => error);
+      while (!signal.aborted && performance.now() < deadline) {
+        await sleep(Math.max(0, Math.min(32, deadline - performance.now())));
+        if (!signal.aborted) fitPhoto(context, image, canvas.width, canvas.height);
+      }
+      if (next) {
+        image = await next;
+        if (image instanceof Error) throw image;
+      }
+    }
+    stopRecording();
+    const error = await complete;
+    if (error) throw error;
+    signal.throwIfAborted();
+    const blob = new Blob(chunks, { type: 'video/' + extension });
+    if (!blob.size) throw new Error('The encoder returned an empty video. Try a lower resolution.');
+    state.exportUrl = URL.createObjectURL(blob);
+    $('download').href = state.exportUrl;
+    $('download').download = 'frame-echo.' + extension;
+    $('download').hidden = false;
+    info.textContent = pixelLabel(canvas.width, canvas.height) + ' · ' + (blob.size / 1048576).toFixed(2) + ' MB';
+  } catch (error) {
+    info.textContent = error.name === 'AbortError' ? 'Export cancelled.' : 'Export failed. ' + error.message;
+  } finally {
+    if (stopRecording) signal.removeEventListener('abort', stopRecording);
+    document.removeEventListener('visibilitychange', stopIfHidden);
+    if (recorder?.state === 'recording') recorder.stop();
+    stream?.getTracks().forEach(track => track.stop());
+    state.stopExport = null;
+    refreshControls();
+  }
+}
+
+$('start').onclick = startCamera;
+$('flip').onclick = () => { state.facing = state.facing === 'environment' ? 'user' : 'environment'; void startCamera(); };
+$('shutter').onclick = shutter;
+$('native').onclick = () => { disarm(); stopPlayback(); refreshControls(); $('nativeFile').click(); };
+$('import').onclick = () => { disarm(); stopPlayback(); refreshControls(); $('file').click(); };
+$('file').onchange = event => importPhotos(event.target);
+$('nativeFile').onchange = event => importPhotos(event.target, true);
+$('play').onclick = togglePlayback;
+$('remove').onclick = removePhoto;
+$('savePhoto').onclick = () => {
+  const frame = selectedFrame();
+  if (frame) saveFile(frame.url, frame.name);
+};
+$('export').onclick = makeVideo;
+$('auto').onclick = () => {
+  if (state.auto) disarm();
+  else {
+    state.auto = true;
+    state.stableSince = null;
+    $('stageMatch').textContent = 'AUTO · ARMED';
+    status('Auto shutter armed for one photo.');
+  }
+  refreshControls();
+};
+$('modes').onclick = event => {
+  const mode = event.target.dataset.mode;
+  if (!mode) return;
+  state.mode = mode;
+  for (const button of $('modes').children) button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+  updateView();
+};
+$('opacity').oninput = event => { $('opacityValue').value = event.target.value + '%'; updateView(); };
+$('threshold').oninput = event => {
+  $('thresholdValue').value = event.target.value + '%';
+  state.stableSince = null;
+};
+$('reference').onchange = () => { disarm(); updateView(); refreshControls(); };
+$('gridToggle').onclick = () => {
+  state.grid = !state.grid;
+  $('gridToggle').setAttribute('aria-pressed', String(state.grid));
+  updateView();
+};
+live.addEventListener('resize', updateView);
+live.addEventListener('playing', () => { updateView(); refreshControls(); });
+new ResizeObserver(layoutGrid).observe($('stage'));
+document.addEventListener('keydown', event => {
+  if (event.code !== 'Space' || event.repeat || event.target.closest('button,input,select,a,textarea,[contenteditable]') || $('shutter').disabled) return;
+  event.preventDefault();
+  shutter();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    disarm();
+    cancelTimer();
+    stopPlayback();
+  } else if (state.stream) {
+    live.play().catch(() => {}).finally(() => { updateView(); refreshControls(); });
+  }
+});
+window.addEventListener('pagehide', () => { stopCamera(); disarm(); cancelTimer(); });
+window.addEventListener('pageshow', () => { updateView(); refreshControls(); });
+
+async function init() {
+  try {
+    state.db = await openStore();
+    const records = await transact('readonly', store => store.getAll());
+    state.frames = records.map(makeFrame);
+    state.selected = state.frames.at(-1)?.id ?? null;
+  } catch {
+    status('Local storage is unavailable. Save originals before closing this page.');
+  }
+  state.ready = true;
+  refreshFrames(true);
+  const sample = async () => {
+    try { await compare(); }
+    catch {
+      disarm();
+      refreshControls();
+      $('matchLabel').textContent = 'The reference could not be compared.';
+    }
+    setTimeout(sample, 125);
+  };
+  void sample();
+}
+refreshControls();
+void init();
+</script>
+</body>
+</html>
