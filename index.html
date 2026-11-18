@@ -31,6 +31,8 @@
   .mark{width:38px;height:38px;display:block}
   .muted{color:var(--muted);font-size:13px}
   .workspace{display:grid;grid-template-columns:minmax(0,1fr) 306px;align-items:start;gap:18px;padding-block:22px 32px}
+  .projects{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:14px}
+  .projects select{max-width:min(100%,260px);min-width:120px}
   .workspace>section{min-width:0}
   .stage{background:#0d100c;border:1px solid var(--line);border-radius:15px;position:relative;overflow:hidden;isolation:isolate;height:clamp(270px,56vh,640px)}
   .stage video,.stage img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
@@ -94,6 +96,11 @@
   <div class="brand"><img class="mark" src="./icon.svg" width="38" height="38" alt=""><h1>Frame Echo</h1></div>
   <span class="muted">Onion-skin camera</span>
 </div></header>
+<section class="wrap projects" aria-label="Projects">
+  <label for="project">Project</label><select id="project" disabled></select>
+  <button id="newProject" disabled>New project</button><button id="renameProject" disabled>Rename</button>
+  <span id="projectStatus" class="muted" role="status"></span>
+</section>
 <main class="wrap workspace">
   <section aria-label="Camera and frames">
     <div class="stage" id="stage">
@@ -167,7 +174,7 @@
 const $ = id => document.getElementById(id);
 const live = $('live'), ghost = $('ghost'), review = $('review');
 const state = {
-  frames: [], selected: null, stream: null, facing: 'environment', mode: 'blend', grid: false,
+  projectId: null, frames: [], selected: null, stream: null, facing: 'environment', mode: 'blend', grid: false,
   db: null, busy: false, ready: false, auto: false, stableSince: null, play: null, timer: null,
   stopExport: null, exportUrl: null, sampleRef: null
 };
@@ -184,17 +191,38 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 function openStore() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open('frame-echo', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('frames', { keyPath: 'id', autoIncrement: true });
-    request.onsuccess = () => resolve(request.result);
+    const request = indexedDB.open('frame-echo', 2);
+    request.onblocked = () => status('Close other Frame Echo tabs so project storage can be updated.');
+    request.onupgradeneeded = event => {
+      const db = request.result;
+      const frames = event.oldVersion === 0
+        ? db.createObjectStore('frames', { keyPath: 'id', autoIncrement: true })
+        : request.transaction.objectStore('frames');
+      frames.createIndex('projectId', 'projectId');
+      db.createObjectStore('settings');
+      db.createObjectStore('projects', { keyPath: 'id' }).add({ id: 'first', name: 'My first project' });
+      if (event.oldVersion === 1) {
+        const cursor = frames.openCursor();
+        cursor.onsuccess = () => {
+          const row = cursor.result;
+          if (!row) return;
+          row.update({ ...row.value, projectId: 'first' });
+          row.continue();
+        };
+      }
+    };
+    request.onsuccess = () => {
+      request.result.onversionchange = () => request.result.close();
+      resolve(request.result);
+    };
     request.onerror = () => reject(request.error);
   });
 }
 
-function transact(mode, action) {
+function transact(mode, action, table = 'frames') {
   return new Promise((resolve, reject) => {
-    const tx = state.db.transaction('frames', mode);
-    const request = action(tx.objectStore('frames'));
+    const tx = state.db.transaction(table, mode);
+    const request = action(tx.objectStore(table));
     tx.oncomplete = () => resolve(request.result);
     tx.onabort = () => reject(tx.error);
     tx.onerror = () => reject(tx.error);
@@ -218,7 +246,7 @@ async function storePhoto(blob, method, name) {
   const url = URL.createObjectURL(blob);
   try {
     const image = await readImage(url);
-    const record = { blob, width: image.naturalWidth, height: image.naturalHeight, method, name };
+    const record = { projectId: state.projectId, blob, width: image.naturalWidth, height: image.naturalHeight, method, name };
     let temporary = !state.db;
     let id;
     if (state.db) {
@@ -228,6 +256,7 @@ async function storePhoto(blob, method, name) {
     const frame = { ...record, id: id ?? 'temp-' + Math.random(), url, temporary };
     state.frames.push(frame);
     state.selected = frame.id;
+    saveProjectSettings();
     return frame;
   } catch (error) {
     URL.revokeObjectURL(url);
@@ -320,6 +349,7 @@ function updateView() {
 function refreshControls() {
   const camera = cameraReady(), frame = selectedFrame(), ref = reference(), exporting = !!state.stopExport;
   const locked = state.busy || exporting || !state.ready;
+  for (const id of ['project', 'newProject', 'renameProject']) $(id).disabled = locked || !state.projectId;
   $('start').disabled = locked;
   $('flip').disabled = !camera || locked || !!state.timer;
   $('shutter').disabled = !camera || locked;
@@ -512,6 +542,7 @@ async function removePhoto() {
     state.frames = state.frames.filter(item => item !== frame);
     state.selected = state.frames.at(-1)?.id ?? null;
     if (!state.selected) $('reference').value = 'latest';
+    saveProjectSettings();
     URL.revokeObjectURL(frame.url);
     status('Photo removed.');
   } catch {
@@ -816,13 +847,106 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', () => { stopCamera(); disarm(); cancelTimer(); });
 window.addEventListener('pageshow', () => { updateView(); refreshControls(); });
 
+const settingFields = ['opacity', 'threshold', 'reference', 'timer', 'fps', 'quality', 'format'];
+const defaultSettings = Object.fromEntries(settingFields.map(id => [id, $(id).value]));
+
+function saveProjectSettings() {
+  const projectId = state.projectId;
+  if (!projectId || !state.ready) return;
+  const settings = Object.fromEntries(settingFields.map(id => [id, $(id).value]));
+  Object.assign(settings, { selected: state.selected, mode: state.mode, grid: state.grid });
+  return transact('readwrite', store => store.put(settings, projectId), 'settings').catch(() => {
+    if (projectId === state.projectId) $('projectStatus').textContent = 'Could not save project settings.';
+  });
+}
+
+async function openProject(id) {
+  const [records, saved] = await Promise.all([
+    transact('readonly', store => store.index('projectId').getAll(id)),
+    transact('readonly', store => store.get(id), 'settings')
+  ]);
+  const settings = { ...defaultSettings, ...saved };
+  state.frames.forEach(frame => URL.revokeObjectURL(frame.url));
+  if (state.exportUrl) URL.revokeObjectURL(state.exportUrl);
+  state.exportUrl = null;
+  $('download').hidden = true;
+  $('download').removeAttribute('href');
+  state.sampleRef = null;
+  state.projectId = id;
+  state.frames = records.map(makeFrame);
+  state.selected = records.some(frame => frame.id === settings.selected) ? settings.selected : records.at(-1)?.id ?? null;
+  for (const key of settingFields) {
+    $(key).value = settings[key];
+    if (!$(key).value) $(key).value = defaultSettings[key];
+  }
+  if (!state.selected) $('reference').value = 'latest';
+  state.grid = !!settings.grid;
+  state.mode = settings.mode || 'blend';
+  $('gridToggle').setAttribute('aria-pressed', String(state.grid));
+  for (const button of $('modes').children) button.setAttribute('aria-pressed', String(button.dataset.mode === state.mode));
+  $('opacityValue').value = $('opacity').value + '%';
+  $('thresholdValue').value = $('threshold').value + '%';
+  $('project').value = id;
+  try { localStorage.setItem('frame-echo-project', id); } catch {}
+  $('projectStatus').textContent = 'Autosaves on this device';
+  $('exportStatus').textContent = options.size ? 'Add photos to export a video.' : 'Video export unavailable in this browser.';
+  refreshFrames(true);
+}
+
+async function projectAction(action) {
+  if (state.busy || state.stopExport || !state.projectId) return;
+  const picker = $('project'), target = picker.value;
+  picker.value = state.projectId;
+  if (action !== 'rename' && state.frames.some(frame => frame.temporary)) {
+    status('Save and remove temporary frames before switching projects.');
+    return;
+  }
+  disarm();
+  stopPlayback();
+  cancelTimer();
+  state.busy = true;
+  refreshControls();
+  try {
+    if (action === 'switch') {
+      await openProject(target);
+    } else {
+      const creating = action === 'new';
+      const option = picker.selectedOptions[0];
+      const name = prompt(creating ? 'New project name' : 'Rename project', creating ? '' : option.textContent)?.trim();
+      if (!name) return;
+      const id = creating ? crypto.randomUUID() : state.projectId;
+      await transact('readwrite', store => store.put({ id, name }), 'projects');
+      if (creating) {
+        picker.add(new Option(name, id));
+        await openProject(id);
+      } else option.textContent = name;
+    }
+    status('');
+  } catch (error) {
+    status('Could not update the project. ' + error.message);
+  } finally {
+    state.busy = false;
+    refreshControls();
+  }
+}
+$('project').onchange = () => projectAction('switch');
+$('newProject').onclick = () => projectAction('new');
+$('renameProject').onclick = () => projectAction('rename');
+document.addEventListener('change', event => {
+  if (settingFields.includes(event.target.id)) saveProjectSettings();
+});
+for (const id of ['gridToggle', 'modes', 'strip']) $(id).addEventListener('click', saveProjectSettings);
+
 async function init() {
   try {
     state.db = await openStore();
-    const records = await transact('readonly', store => store.getAll());
-    state.frames = records.map(makeFrame);
-    state.selected = state.frames.at(-1)?.id ?? null;
+    const projects = await transact('readonly', store => store.getAll(), 'projects');
+    projects.forEach(project => $('project').add(new Option(project.name, project.id)));
+    let last;
+    try { last = localStorage.getItem('frame-echo-project'); } catch {}
+    await openProject(projects.some(project => project.id === last) ? last : 'first');
   } catch {
+    state.db = null;
     status('Local storage is unavailable. Save originals before closing this page.');
   }
   state.ready = true;
