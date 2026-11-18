@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#141611">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <title>Frame Echo · Onion-skin camera</title>
 <style>
   :root{color-scheme:dark;--bg:#141611;--panel:#1c1f18;--field:#262a20;--line:#363c2e;--text:#f3f4ec;--muted:#adbaa0;--accent:#d8fa89;--dark:#242f0c;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
@@ -24,9 +26,7 @@
   h1{font-size:25px;letter-spacing:-.045em;line-height:1}
   h2{font-size:15px;font-weight:650}
   .brand{display:flex;align-items:center;gap:12px}
-  .mark{width:26px;height:22px;position:relative;margin-right:3px}
-  .mark::before,.mark::after{content:"";position:absolute;width:17px;height:17px;border-radius:5px;border:2px solid var(--accent)}
-  .mark::before{top:0;left:0;opacity:.55}.mark::after{bottom:0;right:0}
+  .mark{width:38px;height:38px;display:block}
   .muted{color:var(--muted);font-size:13px}
   .workspace{display:grid;grid-template-columns:minmax(0,1fr) 306px;align-items:start;gap:18px;padding-block:22px 32px}
   .workspace>section{min-width:0}
@@ -89,7 +89,7 @@
 </head>
 <body>
 <header><div class="wrap header">
-  <div class="brand"><span class="mark" aria-hidden="true"></span><h1>Frame Echo</h1></div>
+  <div class="brand"><img class="mark" src="./icon.svg" width="38" height="38" alt=""><h1>Frame Echo</h1></div>
   <span class="muted">Onion-skin camera</span>
 </div></header>
 <main class="wrap workspace">
